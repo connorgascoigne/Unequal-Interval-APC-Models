@@ -239,7 +239,7 @@ hol.spline.fun <- function(data, mod = c('apc','ac','ap','pc','a','p','c'),
   
   mod = mgcv::gam(G = fit)
   
-  return(list(mod = mod, X = fit$X, S = fit$S, M = M))
+  return(list(mod = mod, X = fit$X, S = fit$S))
 }
 
 ## extract results from the spline function ------------------------------------
