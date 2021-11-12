@@ -85,8 +85,15 @@ gradient.plot <- function(x, is.log = F){
   
   ggplot(x1, aes(x = year, y = age, fill = value))+ 
     geom_raster(hjust = 0.5, vjust = 0.5, interpolate = FALSE)+
-    scale_fill_gradientn(colors = colorRamps::matlab.like2(10000))+
-    my.theme()
+    scale_fill_gradientn(colors = colorRamps::matlab.like2(10000), name = 'Log \nMortality \nRate')+
+    labs(x = 'Year', y = 'Age')+
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          # legend.title = element_blank(),
+          legend.text.align = 0,
+          legend.key = element_rect(fill = NA))
 }
 
 # takes and model and plots the smooth functions (identifiable in APC model)
