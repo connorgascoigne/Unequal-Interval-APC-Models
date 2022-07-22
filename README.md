@@ -4,47 +4,14 @@ Here are the files to recreate the data and plots from the Manuscript.
 
 ## Folder Structure
 
-```
-Simulation Study
-│   README.md
-│   file001.txt    
-│
-└───Code
-│   │   functions.R
-│   │   additional_plots.R
-│   │   save_data.R
-│   │   run_save_data.slm
-│   │   batch_run_save_data.slm
-│   │
-│   └───Model Fitting
-│   |   │   true.R
-│   |   │   run_true.slm
-│   |   │   batch_run_true.slm
-│   |   │   fit_models.R
-│   |   │   run_fit_models.slm
-│   |   │   batch_run_fit_models.slm
-│   └───Model Fitting
-│       │   true.R
-│       │   run_true.slm
-│       │   batch_run_true.slm
-│       │   fit_models.R
-│       │   run_fit_models.slm
-│       │   batch_run_fit_models.slm
-│   
-└───Data
-    │   file021.txt
-    │   file022.txt
-```
+### Simulation Study
 
-## Use of Cluster
+#### Data
 
-## Practical Guide
+- This folder is created in save_data.R
+- This is where the data is stored once generated 
 
-- Each .R file follows a similar pattern with imported library's in the first lines followed by manually setting the working directory to a variable
-- Setting the working directory to this variable is paramount to ensuring the rest of the code can be run in a ‘press and play’ fashion
-- Any subfolder needed for savin (data, images, outputs, etc, ...) will be created within the code
-
-## R Files
+#### Code
 
 - functions.R
  - These are all the functions needed to create the data, fit the models and create the plots
@@ -86,65 +53,64 @@ Simulation Study
   - Runs all the code relating to the Application in both the Manuscript and Supplementary Material
   
  - save_data.R
-  - This is an R script to generate all the data needed for the simualtion study
+  - This is an R script to generate all the data needed for the simualtion study for specifc `family`, `datMod` and `M`
   - This requries a large amount of computation so it is run over a cluster using two additional scripts
   - Explicity uses the `data.sim` function
   - Implictly uses the `age.fun.binomial`, `per.fun.binomial` and `coh.fun.binomial` (and the Gaussian and Poisson evivalent) functions
   
  - run_save_data.slm
-  - code to run the save_data.R file for specifc arguments
-   - `family` - family for the distribution
-   - `datMod` - the type of model used to generate the data 
-   - `M` - aggregation of age
-  - This is run using slurm
+  - code to run the save_data.R file for specifc `family`, `datMod` and `M`
   
  - batch_run_save_data.slm
-  - Loops over inputs for `family`, `datMod` and `M`
-  
+    - Loops over run_save_data.slm inputs for `family`, `datMod` and `M`
+
+##### Model Fitting
+
+- true.R
+ - Generates the true data for specifc `family`, `datMod` and `M`
+- run_true.slm
+ - code to run the true.R file for specifc `family`, `datMod` and `M`
+- batch_run_true.slm
+ - Loops over run_true.slm inputs for `family`, `datMod` and `M`
+- fit_models.R
+ - Fits all models for specifc `family`, `datMod` and `M`
+- run_fit_models.slm
+ - code to run the fit_models.R file for specifc `family`, `datMod` and `M`
+- batch_run_fit_models.slm
+ - Loops over run_fit_models.slm inputs for `family`, `datMod` and `M`
+
+##### Results Collecting
+
+- collect_results.R
+- run_collect_results.slm
+- batch_run_collect_results.slm
+- plot_results
+- run_plot_results.sh
+
+##### Results
+
+- This folder and subfolders are created in various functions within Model Fitting and Results Collecting
+
+###### Final
+
+- The final data
+
+###### Plots
+
+- The final plots
+
+## Use of Cluster
+
+- The simulation study is implemented over a cluster
+- The format is as follows
+    - XXX.R - perform an action (e.g., fit a model or generate data). This requires a number of arguments (e.g., type of APC model, family for distribution, aggregation type)
+    - run_XXX.slm - passes one set of arguments to XXX.R to run one instance (e.g., fit one model for the given arguments)
+    - batch_run_XXX.slm - loops over all combinations of the arguments and supplies this to run_XXX.slm which, in turn, supplies this to XXX.R   
+
+## Practical Guide
+
+- Each .R file follows a similar pattern with imported library's in the first lines followed by manually setting the working directory to a variable
+- Setting the working directory to this variable is paramount to ensuring the rest of the code can be run in a ‘press and play’ fashion
+- Any subfolder needed for savin (data, images, outputs, etc, ...) will be created within the code
 
 
-## R Files
-
-- data_generation.R
-  - Funtions to create the curves for each temporal function for each case of Gaussian, binomial and Poisson data.
-  - `data.sim()` - simulates equal age-period data and (if chosen) aggregates appropriately.
-  -  `find.all.estimates()` - takes a data frame with the age, period and cohort combinations and a vector of respones and returns each temporal effect and curavture curve.
-  -  `true.values()` - returns a data frame and plots of true values from the temporal functions.
-- holford_models.R
-  - `gen.lin.const()` - prduces the Z constrain matrix based off of the matrix to constrain and the columsn to orthogonalise against.
-  - `my.predictMat()` - produces the model matrix for a spline model version of Holfords re-parameterisation.
-  - `my.predict()` - produces predictions for a give data frame (or uses the data supplied to fit the model) using a spline model and Holfords re-parameterisation.
-  - `hol.spline.fun()` - fits the spline model based on Holford re-parameterisation.
-    - `data` - data frame of data including age, period, cohort, y (response) and N (total) columns.
-    - `mod`  - what type of model to fit, can be APC or any sub model.
-    - `knots` - list of number of knots for temporal functions.
-    - `fixed` - are the splines penalised or not.
-    - `colDrop` - if fitting an APC model, what slope is to be dropped. The sub models are re-parameterised in the same manor but include all linear slopes as they do not have the structural link identification problem
-    - `distribution` - what is the distribution used to generate the data.
-  - `hol.spline.extract()` - produces a data frame and plots of the effect and curvature estimates from the spline (penalised or not) model fit.
-  - `hol.factor.X()` - produces the model matrix for a factor model version of Holfords re-parameterisation.
-  - `hol.factor.fun()` - fits the factor model based on Holfords re-parameterisation.
-  - `hol.factor.extract()` - produces a data frame and plots of the effect and curvature estimates from the factor model fit.
-  - `run.holford.sim()` - runs the full simulation study for the factor (FA), regression smoothing spline (RSS, without penalisation) and penalised smoothing spline (PSS, with penalisation) models. 
-    -  `fixedParams` - parameters for the data generation that are fixed for all distributions.
-    -  `modParams` - parameters for defining the models (i.e. list of knots which changes depending on M).
-    -  `distParams` - parameters for each individual distribution.
-- analysis.R
-  - `my.theme()` - produces the same styke for all plots.
-  - `get.final.plot()` - collect the results of siumulation study and the make the plots seen in the manuscript and supplementary material.  
-- Example_full_study.R
-  - Runs the full simulation from top to bottom.
-  - Ensure the working directory is set to source file location which contains all the `.R` files and in the `run.holford.sim()` the file paths match.
-  - Choices to make:
-    - Fitting the models with equal or unequal data.
-    - What distribution to use  
-- HMD_application.R
-  - `aggregate.data()` - aggregated HMS data.
-  - `gradient.plot()` - replicates the gradient plot from the supplementary material.
-  - `plot.terms()` - plots the smooth functions of curvature for each temporal term from the model fit.
-  - Put in your username and password in order to download the data. The HMS data is not shareable but free to download upon registering.  
-
-## Other Files
-
-- final_supplementary.pdf
-  - Supplementary material to the manuscript.
