@@ -118,6 +118,8 @@ Here are the files to recreate the data and plots from the Manuscript.
 
 - Each .R file follows a similar pattern with imported library's in the first lines followed by manually setting the working directory to a variable
 - Setting the working directory to this variable is paramount to ensuring the rest of the code can be run in a ‘press and play’ fashion
-- Any subfolder needed for savin (data, images, outputs, etc, ...) will be created within the code
+- The working directory will change depending upon whether running off of local machine or cluster
+- Files can run on a local machine for a small number of simualtions or combination of different arguments, but we suggest using a cluster to fully run the simulation
+- Any subfolder needed for saving (data, images, outputs, etc, ...) will be created within the code
 
 
