@@ -1,4 +1,4 @@
-# packages ---------------------------------------------------------------------
+# packages ----
 
 library(demography) # for data
 library(tidyverse) # for data wrangling
@@ -6,145 +6,16 @@ library(mgcv) # for fitting models
 library(patchwork) # for ggplot+ggplot
 library(xtable) # r tabels in latex
 
-# source functions -------------------------------------------------------------
+# path ----
 
-source('holford_models.R') # for model fit
-source('analysis.R') # for my.theme()
+simulationFolder <- 'C:/Users/cg863/OneDrive - University of Bath/Bath PhD/Year 3/Simulation Study/'
+# simulationFolder <- '/beegfs/scratch/user/r/cg863/code/Simulation Study/'
 
-# functions --------------------------------------------------------------------
+## functions ----
 
-# aggregates data by finding an age and period bin using a and p group only
-# then something like agg(~ ageBin+periodBin)
-# then finds c = p-a where p and 1 are midpoints of bins
-aggregate.data <- function(rate, population, ageAgg, perAgg){
-  
-  # collecting rate and population into one df and finding counts
-  p <- as.data.frame(as.table(population)); colnames(p) <- c('age', 'year', 'N')
-  r <- as.data.frame(as.table(rate)); colnames(r) <- c('age', 'year', 'R')
-  data <- left_join(p, r, by = c('age', 'year'), keep = FALSE)
-  data$age <- as.numeric(levels(data$age))[data$age]
-  data$year <- as.numeric(levels(data$year))[data$year]
-  data$y <- data$N*data$R
-  
-  # define a sequence where last element is included in from:to !%% by
-  my.seq <- function (from, to, by){
-    vec <- do.call(what = seq, args = list(from, to, by))
-    if ( tail(vec, 1) !=  to ) {
-      return(c(vec, to))
-    } else {
-      return(vec)
-    }
-  }
-  
-  # bin observations from my.seq
-  my.cut <- function(x, from, to, by){
-    brks <- my.seq(from = from, to = to, by = by)
-    x = cut(x = x, breaks = brks, right = F, include.lowest = T, dig.lab = 4)
-    x
-  }
-  
-  # vector of the mid points from my.seq
-  mid.seq <- function(x, from, to, by){
-    brks <- my.seq(from = from, to = to, by = by)
-    x = cut(x = x, breaks = brks, include.lowest = T, dig.lab = 4)
-    vec = my.seq(from = from+by/2, to = to-by/2, by = by)
-    names(vec) = levels(x)
-    vec
-  }
-  
-  # define the bins and add column to data
-  data$ageBin <- my.cut(x = data$age, from = min(data$age), to = max(data$age), by = ageAgg)
-  data$yearBin <- my.cut(x = data$year, from = min(data$year), to = max(data$year), by = perAgg)
-  
-  # define midpoints of the bins
-  a <- mid.seq(data$age, from = min(data$age), to = max(data$age), by = ageAgg)
-  p <- mid.seq(data$year, from = min(data$year), to = max(data$year), by = perAgg)
-  
-  # aggregate data over the bin and add vector of midpoints
-  agg <- aggregate(cbind(N,y) ~ ageBin + yearBin, data = data, sum, na.rm = T) %>% arrange(ageBin, yearBin)
-  agg$a <- a[as.numeric(agg$ageBin)]
-  agg$p <- p[as.numeric(agg$yearBin)]
-  agg$c <- agg$p - agg$a
-  
-  dataAgg <- agg %>% relocate(c('a', 'p', 'c'), .before = ageBin) %>% arrange(a, p, c)
-  
-  dataAgg
-}
+source(paste0(simulationFolder, 'Code/functions.R'))
 
-# make a gradient plot
-gradient.plot <- function(x, is.log = F){
-  
-  x1 <- as.data.frame(as.table(x))
-  colnames(x1) <- c('age', 'year', 'value')
-  x1$age <- as.numeric(levels(x1$age))[x1$age]
-  x1$year <- as.numeric(levels(x1$year))[x1$year]
-  
-  if(is.log == T){
-    x1$value <- log(x1$value)
-  }
-  
-  ggplot(x1, aes(x = year, y = age, fill = value))+ 
-    geom_raster(hjust = 0.5, vjust = 0.5, interpolate = FALSE)+
-    scale_fill_gradientn(colors = colorRamps::matlab.like2(10000), name = 'Log \nMortality \nRate')+
-    labs(x = 'Year', y = 'Age')+
-    theme(panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          panel.background = element_blank(),
-          axis.line = element_line(colour = "black"),
-          # legend.title = element_blank(),
-          legend.text.align = 0,
-          legend.key = element_rect(fill = NA))
-}
-
-# takes and model and plots the smooth functions (identifiable in APC model)
-plot.terms <- function(gamObj, data){
-  
-  pred <- my.predict(gamObj = gamObj,type = 'terms')
-  pred.est <- pred$est
-  pred.se <- pred$se
-  
-  n.pterms <- length(attr(gamObj$pterms, 'term.labels'))
-  n.smooth <- length(gamObj$smooth)
-  names <- colnames(pred.est)
-  
-  allTermsPred <- c()
-  effect.levels <- c()
-  for(i in 1:n.smooth){
-    # labelling
-    label <- gamObj$smooth[[i]]$label
-    term <- gamObj$smooth[[i]]$term
-    
-    # dataframe for estimate and 95% CI
-    all <- data.frame(Effect = label, Index = data[,term], Estimate = pred.est[,label])
-    all$lower <- all$Estimate + stats::qnorm(0.025)*pred.se[,label]
-    all$upper <- all$Estimate + stats::qnorm(0.975)*pred.se[,label]
-    
-    # unique values
-    final <- aggregate(cbind(Estimate, lower, upper) ~ Effect + Index, FUN = mean, data = all)
-    
-    allTermsPred <- rbind(allTermsPred, final)
-    effect.levels <- c(effect.levels, label)
-  }
-  
-  termsPred <- 
-    allTermsPred %>% 
-    mutate(Effect = factor(Effect, levels = unique(effect.levels, fromLast = TRUE)))
-  
-  plot <- 
-    ggplot(termsPred, aes(x = Index, y = Estimate, group = Effect, col = Effect)) + 
-    geom_line() + 
-    geom_point() + 
-    facet_grid(~Effect,scales = 'free') + 
-    geom_ribbon(aes(ymin = lower,ymax = upper,fill = Effect), alpha = .2, linetype = 0, show.legend = F) + 
-    my.theme()
-  
-  return(list(plot = plot, termsPred = termsPred)) 
-}
-
-
-# data import ------------------------------------------------------------------
-
-rm(list = setdiff(ls(), lsf.str()))
+# data import ----
 
 uk <- hmd.mx('GBR_NP', 'xxx ENTER USER NAME xxx', 'xxx ENTER PASSWORD xxx', 'UK')
 
@@ -158,13 +29,27 @@ ukPopAll <- uk$pop$total
 ukPop <- ukPopAll[!rownames(ukPopAll) %in% c(as.character(100:109), '110+'),
                 !colnames(ukPopAll) %in% as.character(c(1922:1925, 2016:2018))]
 
+# directory for plots ----
 
-# exploratory plots ------------------------------------------------------------
+# results folder
+if(!dir.exists(paths = paste0(simulationFolder, 'Code/Results'))) {
+  dir.create(path = paste0(simulationFolder, 'Code/Results'))
+}
 
-# gradient plot
-p1 <- gradient.plot(x = ukRate,is.log = T);p1
+# plots folder
+if(!dir.exists(paths = paste0(simulationFolder, 'Code/Results/Plots'))) {
+  dir.create(path = paste0(simulationFolder, 'Code/Results/Plots'))
+}
 
-# fitting models for different M -----------------------------------------------
+# HMD application folder
+if(!dir.exists(paths = paste0(simulationFolder, 'Code/Results/Plots/HMD Application'))) {
+  dir.create(path = paste0(simulationFolder, 'Code/Results/Plots/HMD Application'))
+}
+
+
+# fitting models for different M ----
+
+## data ----
 
 # round data to ensure we have counts
 dataA <- aggregate.data(ukRate, ukPop, ageAgg = 1, perAgg = 1) %>% mutate(N = round(N), y = round(y))
@@ -175,6 +60,25 @@ dataC <- aggregate.data(ukRate, ukPop, ageAgg = 5, perAgg = 5) %>% mutate(N = ro
 # print(xtable(dataA[c(1:3, (nrow(dataA)-2):nrow(dataA)),4:7], type = 'latex'), include.rownames = FALSE)
 # print(xtable(dataB[c(1:3, (nrow(dataB)-2):nrow(dataB)),4:7], type = 'latex'), include.rownames = FALSE)
 # print(xtable(dataC[c(1:3, (nrow(dataC)-2):nrow(dataC)),4:7], type = 'latex'), include.rownames = FALSE)
+
+## gradient plot of data ----
+
+dataAug <-
+  dataA %>%
+  mutate(rate = logit(y/N))
+
+trueLexis <- 
+  ggplot(dataAug, aes(x = p, y = a, fill = rate)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = colorRamps::matlab.like2(10000))  +
+  labs(x = 'Year', y = 'Age', fill = 'Logit \nMortality \nRate') +
+  my.theme(text = element_text(size = 20))
+
+ggsave(trueLexis, 
+       file = paste0(simulationFolder, 'Code/Results/Plots/HMD Application/trueLexis1x1.png'),
+       width = 10, height = 10)
+
+## model fit ----
 
 # smallest number of unique points to base the knots off of
 A <- length(unique(dataC$a))
@@ -189,15 +93,15 @@ knots <- list(age = 10,period = 10,cohort = 20)
 # want to penalise to fixed = F
 fixed <- list(age = FALSE, period = FALSE, cohort = FALSE)
 
-fitA <- hol.spline.fun(data = dataA, mod = 'apc', knots = knots, fixed = fixed, colDrop = 'c', distribution = 'binomial')
-fitB <- hol.spline.fun(data = dataB, mod = 'apc', knots = knots, fixed = fixed, colDrop = 'c', distribution = 'binomial')
-fitC <- hol.spline.fun(data = dataC, mod = 'apc', knots = knots, fixed = fixed, colDrop = 'c', distribution = 'binomial')
+fitA <- hol.spline.fun(data = dataA, mod = 'apc', knots = knots, fixed = fixed, slopeDrop = 'c', family = 'binomial')
+fitB <- hol.spline.fun(data = dataB, mod = 'apc', knots = knots, fixed = fixed, slopeDrop = 'c', family = 'binomial')
+fitC <- hol.spline.fun(data = dataC, mod = 'apc', knots = knots, fixed = fixed, slopeDrop = 'c', family = 'binomial')
 
 modA <- fitA$mod
 modB <- fitB$mod
 modC <- fitC$mod
 
-# getting plots for smooth terms for all models --------------------------------
+# getting plots for smooth terms for all models ----
 
 predA <- plot.terms(gamObj = modA, data = dataA)
 predB <- plot.terms(gamObj = modB, data = dataB)
@@ -215,11 +119,69 @@ all.mod.term <-
                                 latex2exp::TeX(r'($\hat{f}_{P_C}(p)$)'), 
                                 latex2exp::TeX(r'($\hat{f}_{C_C}(c)$)'))))
 
-p1 <- 
+smoothCurvaturePlot <- 
   ggplot(all.mod.term, aes(x = Index, y = Estimate, group = M, col = M))+
   geom_line()+
   geom_point(aes(shape = M))+
-  facet_wrap(~Effect,scales = 'free',labeller = label_parsed)+
+  facet_wrap(~Effect, scales = 'free', labeller = label_parsed)+
   labs(x = 'Years',
        y = 'Estimate')+
-  my.theme();p1
+  my.theme(text = element_text(size = 20),
+           legend.title=element_blank())
+
+smoothCurvaturePlot
+
+ggsave(smoothCurvaturePlot, 
+       file = paste0(simulationFolder, 'Code/Results/Plots/HMD Application/smoothCurvaturePlot.png'),
+       width = 10, height = 10)
+
+# expected response plots ----
+
+yPredA <- my.predict(gamObj = fitA$mod, type = 'response')
+yPredB <- my.predict(gamObj = fitB$mod, type = 'response')
+yPredC <- my.predict(gamObj = fitC$mod, type = 'response')
+
+dataPredA <-
+  dataA %>%
+  mutate(rateHat = yPredA$est)
+dataPredB <-
+  dataB %>%
+  mutate(rateHat = yPredB$est)
+dataPredC <-
+  dataC %>%
+  mutate(rateHat = yPredC$est)
+
+predLexisA <- 
+  ggplot2::ggplot(dataPredA, aes(x = p, y = a, fill = rateHat)) +
+  ggplot2::geom_tile() +
+  ggplot2::scale_fill_gradientn(colors = colorRamps::matlab.like2(10000))  +
+  ggplot2::labs(x = 'Year', y = 'Age', fill = 'Predicted \nLogit \nMortality \nRate') +
+  my.theme(text = element_text(size = 20))
+
+predLexisB <- 
+  ggplot2::ggplot(dataPredB, aes(x = p, y = a, fill = rateHat)) +
+  ggplot2::geom_tile(height = 5) +
+  ggplot2::scale_fill_gradientn(colors = colorRamps::matlab.like2(10000))  +
+  ggplot2::labs(x = 'Year', y = 'Age', fill = 'Predicted \nLogit \nMortality \nRate') +
+  my.theme(text = element_text(size = 20))
+
+predLexisC <- 
+  ggplot2::ggplot(dataPredC, aes(x = p, y = a, fill = rateHat)) +
+  ggplot2::geom_tile(width = 5, height = 5) +
+  # ggplot2::geom_tile() +
+  ggplot2::scale_fill_gradientn(colors = colorRamps::matlab.like2(10000))  +
+  ggplot2::labs(x = 'Year', y = 'Age', fill = 'Predicted \nLogit \nMortality \nRate') +
+  my.theme(text = element_text(size = 20))
+
+(trueLexis + predLexisA) / (predLexisB + predLexisC)
+
+
+ggsave(predLexisA, 
+       file = paste0(simulationFolder, 'Code/Results/Plots/HMD Application/predLexis1x1.png'),
+       width = 10, height = 10)
+ggsave(predLexisB, 
+       file = paste0(simulationFolder, 'Code/Results/Plots/HMD Application/predLexis5x1.png'),
+       width = 10, height = 10)
+ggsave(predLexisC, 
+       file = paste0(simulationFolder, 'Code/Results/Plots/HMD Application/predLexis5x5.png'),
+       width = 10, height = 10)
